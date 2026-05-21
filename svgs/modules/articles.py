@@ -88,6 +88,7 @@ class ArticlesModule(tk.Frame):
                 ("P. Achat",     90, "e"),
                 ("P. Vente",     90, "e"),
                 ("Unité",        70, "center"),
+                ("Stock",        70, "center"),
                 ("Seuil",        60, "center"),
                 ("Statut",       80, "center"),
             ],
@@ -107,14 +108,16 @@ class ArticlesModule(tk.Frame):
                  fg=COLORS["primary"]).pack(anchor="w", pady=(0,14))
 
         # Variables
-        self._v_code  = tk.StringVar()
-        self._v_desg  = tk.StringVar()
-        self._v_cat   = tk.StringVar()
-        self._v_pach  = tk.StringVar()
-        self._v_pvte  = tk.StringVar()
-        self._v_unite = tk.StringVar()
-        self._v_seuil = tk.StringVar(value="5")
-        self._v_cbar  = tk.StringVar()
+        self._v_code      = tk.StringVar()
+        self._v_desg      = tk.StringVar()
+        self._v_cat       = tk.StringVar()
+        self._v_pach      = tk.StringVar()
+        self._v_pvte      = tk.StringVar()
+        self._v_unite     = tk.StringVar()
+        self._v_qte       = tk.StringVar(value="0")
+        self._v_qte_res   = tk.StringVar(value="0")
+        self._v_seuil     = tk.StringVar(value="5")
+        self._v_cbar      = tk.StringVar()
 
         fields = [
             ("Code article *",    self._v_code,  False),
@@ -123,6 +126,8 @@ class ArticlesModule(tk.Frame):
             ("Prix d'achat *",    self._v_pach,  False),
             ("Prix de vente *",   self._v_pvte,  False),
             ("Unité de mesure",   self._v_unite, False),
+            ("Quantité initiale", self._v_qte,   False),
+            ("Quantité réservée", self._v_qte_res, False),
             ("Seuil d'alerte",    self._v_seuil, False),
         ]
         for lbl, var, ro in fields:
@@ -215,7 +220,8 @@ class ArticlesModule(tk.Frame):
 
             cursor.execute(f"""
                 SELECT a.*, c.libelle AS cat_nom,
-                       s.quantite_actuelle AS qte
+                       s.quantite_actuelle AS qte,
+                       s.quantite_reservee AS qte_res
                 FROM articles a
                 LEFT JOIN categories c ON c.id = a.categorie_id
                 LEFT JOIN stocks s     ON s.article_id = a.id
@@ -226,12 +232,15 @@ class ArticlesModule(tk.Frame):
             for r in cursor.fetchall():
                 statut = "✅ Actif" if r["statut"] == "actif" else "⛔ Inactif"
                 tag = "" if r["statut"] == "actif" else "warning"
+                stock = float(r.get("qte") or 0)
                 self.table.insert((
                     r["code"], r["designation"],
                     r["cat_nom"] or "—",
                     f"{int(r['prix_achat']):,}".replace(",", " "),
                     f"{int(r['prix_vente']):,}".replace(",", " "),
-                    r["unite"], r["seuil_alerte"], statut
+                    r["unite"],
+                    f"{stock:,.0f}".replace(",", " "),
+                    r["seuil_alerte"], statut
                 ), tag=tag)
 
             cursor.close()
@@ -264,7 +273,8 @@ class ArticlesModule(tk.Frame):
             conn   = get_connection()
             cursor = conn.cursor(dictionary=True)
             cursor.execute("""
-                SELECT a.*, c.libelle AS cat_nom, s.quantite_actuelle
+                SELECT a.*, c.libelle AS cat_nom,
+                       s.quantite_actuelle, s.quantite_reservee
                 FROM articles a
                 LEFT JOIN categories c ON c.id = a.categorie_id
                 LEFT JOIN stocks s     ON s.article_id = a.id
@@ -280,9 +290,11 @@ class ArticlesModule(tk.Frame):
                 self._v_pach.set(str(r["prix_achat"]))
                 self._v_pvte.set(str(r["prix_vente"]))
                 self._v_unite.set(r["unite"])
+                self._v_qte.set(str(r.get("quantite_actuelle") or 0))
+                self._v_qte_res.set(str(r.get("quantite_reservee") or 0))
                 self._v_seuil.set(str(r["seuil_alerte"]))
                 self._v_cat.set(r["cat_nom"] or "")
-                qte = r["quantite_actuelle"] or 0
+                qte = float(r.get("quantite_actuelle") or 0)
                 self._stock_lbl.config(
                     text=f"📦 Stock actuel : {qte:.0f} {r['unite']}",
                     fg=COLORS["success"] if qte > r["seuil_alerte"]
@@ -302,19 +314,23 @@ class ArticlesModule(tk.Frame):
         for v in (self._v_code, self._v_cbar, self._v_desg,
                   self._v_pach, self._v_pvte, self._v_unite, self._v_cat):
             v.set("")
+        self._v_qte.set("0")
+        self._v_qte_res.set("0")
         self._v_seuil.set("5")
         self._stock_lbl.config(text="")
         self._price_warn.config(text="")
 
     def _save(self):
-        code  = self._v_code.get().strip()
-        desg  = self._v_desg.get().strip()
-        pach  = self._v_pach.get().strip()
-        pvte  = self._v_pvte.get().strip()
-        unite = self._v_unite.get().strip() or "unité"
-        seuil = self._v_seuil.get().strip() or "5"
-        cbar  = self._v_cbar.get().strip()
-        cat   = self._v_cat.get().strip()
+        code   = self._v_code.get().strip()
+        desg   = self._v_desg.get().strip()
+        pach   = self._v_pach.get().strip()
+        pvte   = self._v_pvte.get().strip()
+        unite  = self._v_unite.get().strip() or "unité"
+        seuil  = self._v_seuil.get().strip() or "5"
+        qte    = self._v_qte.get().strip() or "0"
+        qte_res = self._v_qte_res.get().strip() or "0"
+        cbar   = self._v_cbar.get().strip()
+        cat    = self._v_cat.get().strip()
 
         if not code or not desg or not pach or not pvte:
             info_dialog(self, "Champs manquants",
@@ -322,11 +338,20 @@ class ArticlesModule(tk.Frame):
                         kind="warning")
             return
         try:
-            pach_f = float(pach)
-            pvte_f = float(pvte)
-            seuil_i = int(seuil)
+            pach_f   = float(pach)
+            pvte_f   = float(pvte)
+            seuil_i  = int(seuil)
+            qte_f    = float(qte)
+            qte_res_f = float(qte_res)
         except ValueError:
-            info_dialog(self, "Erreur", "Prix et seuil doivent être des nombres.", kind="error")
+            info_dialog(self, "Erreur", "Prix, quantité et seuil doivent être des nombres.", kind="error")
+            return
+
+        if qte_f < 0 or qte_res_f < 0:
+            info_dialog(self, "Erreur", "Les quantités ne peuvent pas être négatives.", kind="error")
+            return
+        if qte_res_f > qte_f:
+            info_dialog(self, "Erreur", "La quantité réservée ne peut pas dépasser la quantité disponible.", kind="error")
             return
 
         # Trouver l'ID de catégorie
@@ -347,6 +372,14 @@ class ArticlesModule(tk.Frame):
                     WHERE id=%s
                 """, (code, cbar or None, desg, cat_id, pach_f, pvte_f,
                       unite, seuil_i, self._selected_id))
+                cursor.execute(
+                    "UPDATE stocks SET quantite_actuelle=%s, quantite_reservee=%s WHERE article_id=%s",
+                    (qte_f, qte_res_f, self._selected_id)
+                )
+                cursor.execute(
+                    "INSERT IGNORE INTO stocks (article_id, quantite_actuelle, quantite_reservee) VALUES (%s, %s, %s)",
+                    (self._selected_id, qte_f, qte_res_f)
+                )
             else:
                 cursor.execute("""
                     INSERT INTO articles
@@ -357,8 +390,8 @@ class ArticlesModule(tk.Frame):
                       unite, seuil_i))
                 art_id = cursor.lastrowid
                 cursor.execute(
-                    "INSERT IGNORE INTO stocks (article_id, quantite_actuelle) VALUES (%s, 0)",
-                    (art_id,)
+                    "INSERT IGNORE INTO stocks (article_id, quantite_actuelle, quantite_reservee) VALUES (%s, %s, %s)",
+                    (art_id, qte_f, qte_res_f)
                 )
             conn.commit()
             cursor.close(); conn.close()

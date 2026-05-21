@@ -13,6 +13,7 @@ from datetime import datetime
 
 from constants import COLORS, FONTS, APP_NAME, ETABLISSEMENT, SIDEBAR_WIDTH, ROLES
 from database import init_database, DB_CONFIG, get_connection
+from widgets import StyledButton
 
 
 class SetupWindow(tk.Toplevel):
@@ -135,22 +136,29 @@ class SVGSApp(tk.Tk):
 
     def _show_setup_first(self):
         """Affiche la configuration si c'est la première fois."""
-        bg = tk.Frame(self, bg=COLORS["bg_sidebar"])
-        bg.pack(fill="both", expand=True)
-        tk.Label(bg, text="🛒  SVGS", font=("Segoe UI", 40, "bold"),
-                 bg=COLORS["bg_sidebar"], fg="white").pack(pady=(120, 8))
-        tk.Label(bg, text="Système de Vente & Gestion des Stocks",
-                 font=("Segoe UI", 14), bg=COLORS["bg_sidebar"],
-                 fg="#90CAF9").pack()
-        tk.Label(bg, text="Base de données MySQL introuvable.\nCliquez pour configurer.",
-                 font=FONTS["body"], bg=COLORS["bg_sidebar"],
-                 fg="#FFCC80", justify="center").pack(pady=20)
+        for w in self.winfo_children():
+            w.destroy()
 
-        btn = tk.Button(bg, text="⚙️  Configurer la base de données",
-                        font=FONTS["btn"], bg=COLORS["success"], fg="white",
-                        relief="flat", bd=0, padx=20, pady=12, cursor="hand2",
-                        command=lambda: SetupWindow(self, self._show_login))
-        btn.pack(pady=8)
+        container = tk.Frame(self, bg=COLORS["bg_main"])
+        container.pack(fill="both", expand=True)
+
+        card = tk.Frame(container, bg=COLORS["bg_card"], bd=1, relief="solid")
+        card.place(relx=0.5, rely=0.5, anchor="center", width=520, height=420)
+
+        tk.Label(card, text="🛠️  Configuration MySQL requise",
+                 font=FONTS["title"], bg=COLORS["bg_card"], fg=COLORS["primary"]).pack(pady=(24, 8))
+        tk.Label(card, text="Aucune connexion à la base de données n'a pu être établie.",
+                 font=FONTS["body"], bg=COLORS["bg_card"], fg=COLORS["text_muted"], justify="center").pack(padx=28)
+        tk.Label(card, text="Démarrez XAMPP, puis configurez vos paramètres MySQL.",
+                 font=FONTS["body"], bg=COLORS["bg_card"], fg=COLORS["text_muted"], justify="center").pack(padx=28, pady=(0, 20))
+
+        StyledButton(card, "⚙️  Configurer la base de données",
+                     style="primary", command=lambda: SetupWindow(self, self._show_login)).pack(pady=12)
+        StyledButton(card, "↺  Réessayer", style="outline",
+                     command=self._show_login).pack(pady=4)
+
+        tk.Label(card, text="💡 Assurez-vous qu'Apache et MySQL sont actifs dans XAMPP.",
+                 font=FONTS["small"], bg=COLORS["bg_card"], fg=COLORS["text_muted"]).pack(pady=(16, 0))
 
     def _on_login_success(self, user):
         self._user = user
@@ -189,25 +197,27 @@ class SVGSApp(tk.Tk):
         self._show_module("dashboard")
 
     def _build_sidebar(self, parent):
-        # Logo
-        logo_frame = tk.Frame(parent, bg=COLORS["primary_dark"], pady=18)
+        # Logo & marque
+        logo_frame = tk.Frame(parent, bg=COLORS["primary_dark"], pady=24)
         logo_frame.pack(fill="x")
-        tk.Label(logo_frame, text="🛒  SVGS", font=("Segoe UI", 16, "bold"),
+        tk.Label(logo_frame, text="🛒", font=("Segoe UI", 30),
+                 bg=COLORS["primary_dark"], fg="white").pack()
+        tk.Label(logo_frame, text="SVGS", font=("Segoe UI", 18, "bold"),
                  bg=COLORS["primary_dark"], fg="white").pack()
         tk.Label(logo_frame, text=ETABLISSEMENT, font=FONTS["small"],
-                 bg=COLORS["primary_dark"], fg="#90CAF9").pack()
+                 bg=COLORS["primary_dark"], fg=COLORS["bg_card_alt"]).pack(pady=(4, 0))
 
         tk.Frame(parent, bg=COLORS["primary"], height=2).pack(fill="x")
 
-        # Info utilisateur
-        user_frame = tk.Frame(parent, bg=COLORS["bg_sidebar"], pady=14, padx=16)
+        # Profil utilisateur
+        user_frame = tk.Frame(parent, bg=COLORS["bg_sidebar"], pady=16, padx=16)
         user_frame.pack(fill="x")
-        tk.Label(user_frame, text=f"👤  {self._user['prenom']} {self._user['nom']}",
+        tk.Label(user_frame, text=f"{self._user['prenom']} {self._user['nom']}",
                  font=FONTS["sidebar"], bg=COLORS["bg_sidebar"],
                  fg=COLORS["text_sidebar"], anchor="w").pack(fill="x")
-        role_lbl = ROLES.get(self._user["role"], self._user["role"])
-        tk.Label(user_frame, text=role_lbl, font=FONTS["small"],
-                 bg=COLORS["bg_sidebar"], fg="#7986CB", anchor="w").pack(fill="x")
+        tk.Label(user_frame, text=ROLES.get(self._user["role"], self._user["role"]),
+                 font=FONTS["small"], bg=COLORS["bg_sidebar"],
+                 fg=COLORS["accent"], anchor="w").pack(fill="x", pady=(2, 0))
 
         tk.Frame(parent, bg=COLORS["primary_dark"], height=1).pack(fill="x", padx=16)
 
@@ -227,16 +237,18 @@ class SVGSApp(tk.Tk):
         for key, icon, label, roles in menu_items:
             if role not in roles:
                 continue
+            item = tk.Frame(parent, bg=COLORS["bg_sidebar"])
+            item.pack(fill="x")
             btn = tk.Button(
-                parent,
+                item,
                 text=f"  {icon}   {label}",
                 font=FONTS["sidebar"],
                 bg=COLORS["bg_sidebar"],
                 fg=COLORS["text_sidebar"],
-                activebackground=COLORS["primary"],
+                activebackground=COLORS["primary_light"],
                 activeforeground="white",
                 relief="flat", bd=0, cursor="hand2",
-                anchor="w", padx=12, pady=11,
+                anchor="w", padx=12, pady=12,
                 command=lambda k=key: self._show_module(k),
             )
             btn.pack(fill="x")
@@ -245,21 +257,20 @@ class SVGSApp(tk.Tk):
                 bg=COLORS["primary"] if self._current_module == k else COLORS["bg_sidebar"]))
             self._sidebar_buttons[key] = btn
 
-        # Séparateur + Déconnexion
-        tk.Frame(parent, bg=COLORS["primary_dark"], height=1).pack(fill="x", padx=16, pady=8)
+        tk.Frame(parent, bg=COLORS["primary_dark"], height=1).pack(fill="x", padx=16, pady=12)
 
-        tk.Button(parent, text="  🔓   Déconnexion",
-                  font=FONTS["sidebar"],
-                  bg=COLORS["bg_sidebar"], fg="#EF9A9A",
-                  activebackground=COLORS["danger"],
-                  activeforeground="white",
-                  relief="flat", bd=0, cursor="hand2",
-                  anchor="w", padx=12, pady=10,
-                  command=self._logout).pack(fill="x", side="bottom", pady=4)
+        logout_btn = tk.Button(parent, text="  🔓   Déconnexion",
+                                font=FONTS["sidebar"],
+                                bg=COLORS["bg_sidebar"], fg=COLORS["danger"],
+                                activebackground=COLORS["danger_light"],
+                                activeforeground=COLORS["text_white"],
+                                relief="flat", bd=0, cursor="hand2",
+                                anchor="w", padx=12, pady=12,
+                                command=self._logout)
+        logout_btn.pack(fill="x", side="bottom", pady=(4, 12), padx=12)
 
-        # Horloge
         self._clock_lbl = tk.Label(parent, text="", font=FONTS["small"],
-                                    bg=COLORS["bg_sidebar"], fg="#5C6BC0")
+                                    bg=COLORS["bg_sidebar"], fg=COLORS["text_muted"])
         self._clock_lbl.pack(side="bottom", pady=6)
         self._update_clock()
 
@@ -269,24 +280,30 @@ class SVGSApp(tk.Tk):
         self.after(1000, self._update_clock)
 
     def _build_topbar(self, parent):
-        bar = tk.Frame(parent, bg=COLORS["bg_header"], pady=8, padx=20)
-        bar.pack(fill="x")
+        top_line = tk.Frame(parent, bg=COLORS["primary"], height=4)
+        top_line.pack(fill="x")
+
+        bar = tk.Frame(parent, bg=COLORS["bg_card"], pady=12, padx=20)
+        bar.pack(fill="x", side="top")
 
         self._topbar_title = tk.Label(bar, text="Tableau de bord",
                                        font=FONTS["heading"],
-                                       bg=COLORS["bg_header"], fg="white")
+                                       bg=COLORS["bg_card"], fg=COLORS["text_main"])
         self._topbar_title.pack(side="left")
 
-        # Alertes stock (badge)
+        tk.Label(bar, text=f"🏪 {ETABLISSEMENT}",
+                 font=FONTS["small"], bg=COLORS["bg_card"],
+                 fg=COLORS["text_muted"]).pack(side="right", padx=12)
+
         self._alert_badge = tk.Label(bar, text="", font=FONTS["small"],
-                                      bg=COLORS["danger"], fg="white",
-                                      padx=8, pady=2)
-        self._alert_badge.pack(side="right", padx=8)
+                                      bg=COLORS["danger"], fg=COLORS["text_white"],
+                                      padx=10, pady=4)
+        self._alert_badge.pack(side="right", padx=(0, 12))
         self._update_alert_badge()
 
-        tk.Label(bar, text=f"🏪 {ETABLISSEMENT}",
-                 font=FONTS["small"], bg=COLORS["bg_header"],
-                 fg="#90CAF9").pack(side="right", padx=20)
+        badge = tk.Label(bar, text="Notifications", font=FONTS["small"],
+                        bg=COLORS["bg_card"], fg=COLORS["text_muted"])
+        badge.pack(side="right")
 
     def _update_alert_badge(self):
         try:
